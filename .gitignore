@@ -1,0 +1,11 @@
+node_modules/
+npm-debug.log*
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/blob-report/
+.vscode/
+.idea/
+.DS_Store
+dist/
+*.tsbuildinfo
