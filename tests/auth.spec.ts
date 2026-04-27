@@ -1,29 +1,46 @@
 import { test, expect } from '@playwright/test';
 
-let authToken: string;
+/**
+ * Session-setup pattern demonstration.
+ *
+ * JSONPlaceholder doesn't have real authentication, so this file demonstrates
+ * the same beforeAll-fetch-once pattern you'd use for a Bearer-token flow:
+ *  - run a setup request once per file
+ *  - cache the result in a module-scoped variable
+ *  - reuse it across all tests in the file
+ *
+ * In a real microservice suite this would be:
+ *   const response = await request.post('/login', {...});
+ *   authToken = (await response.json()).token;
+ */
+
+let sessionUserId: number;
 
 test.beforeAll(async ({ request }) => {
-  const response = await request.post('/login', {
-    data: { email: 'eve.holt@reqres.in', password: 'cityslicka' },
-  });
+  // Fetch "current user" once — same pattern as logging in once for the whole file.
+  const response = await request.get('/users/1');
   expect(response.ok()).toBeTruthy();
   const body = await response.json();
-  expect(body.token).toBeDefined();
-  authToken = body.token;
+  expect(body.id).toBeDefined();
+  sessionUserId = body.id;
 });
 
-test.describe('Authentication', () => {
-  test('successful login yields a non-empty bearer token', async () => {
-    expect(authToken).toBeTruthy();
-    expect(authToken.length).toBeGreaterThan(5);
+test.describe('Session setup pattern (beforeAll)', () => {
+  test('session user id is captured and reusable across tests', async () => {
+    expect(sessionUserId).toBe(1);
   });
 
-  test('login with missing password returns 400 with error message', async ({ request }) => {
-    const response = await request.post('/login', {
-      data: { email: 'peter@klaven' },
-    });
-    expect(response.status()).toBe(400);
-    const body = await response.json();
-    expect(body.error).toBeDefined();
+  test('cached session id can be used to fetch user-owned resources', async ({ request }) => {
+    // Use the session-scoped id to query a related resource —
+    // analogous to using a cached bearer token for protected endpoints.
+    const response = await request.get(`/users/${sessionUserId}/posts`);
+    expect(response.ok()).toBeTruthy();
+    const posts = await response.json();
+    expect(Array.isArray(posts)).toBeTruthy();
+    expect(posts.length).toBeGreaterThan(0);
+    // Every returned post must belong to the session user (invariant).
+    for (const post of posts) {
+      expect(post.userId).toBe(sessionUserId);
+    }
   });
 });
